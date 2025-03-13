@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.OpenApi;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
@@ -25,41 +26,49 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+
+app.Use(async (context, next) =>
+{
+    await next();
+    Console.WriteLine($"{context.Request.Method} {context.Request.Path} {context.Response.StatusCode}");
+});
+
 app.MapGet("/", () => "Hello World!");
 app.MapGet("/about", () => "Contoso was founded in 2000.");
+app.UseRewriter(new RewriteOptions().AddRedirect("history", "about"));
 
 app.MapGet("/pizzas", async (PizzaDb db) => await db.Pizzas.ToListAsync());
 app.MapGet("/pizza/{id}", async (PizzaDb db, int id) => await db.Pizzas.FindAsync(id));
 
 app.MapPost("/pizza", async (PizzaDb db, Pizza pizza) =>
-    {
-        await db.Pizzas.AddAsync(pizza);
-        await db.SaveChangesAsync();
-        return Results.Created($"/pizza/{pizza.Id}", pizza);
-    });
+{
+    await db.Pizzas.AddAsync(pizza);
+    await db.SaveChangesAsync();
+    return Results.Created($"/pizza/{pizza.Id}", pizza);
+});
 
 app.MapPut("/pizza/{id}", async (PizzaDb db, Pizza updatepizza, int id) =>
-    {
-        var pizza = await db.Pizzas.FindAsync(id);
-        if (pizza is null)
-            return Results.NotFound();
-        pizza.Name = updatepizza.Name;
-        pizza.Description = updatepizza.Description;
-        await db.SaveChangesAsync();
-        return Results.NoContent();
-    });
+{
+    var pizza = await db.Pizzas.FindAsync(id);
+    if (pizza is null)
+        return Results.NotFound();
+    pizza.Name = updatepizza.Name;
+    pizza.Description = updatepizza.Description;
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
 
 app.MapDelete("/pizza/{id}", async (PizzaDb db, int id) =>
+{
+    var pizza = await db.Pizzas.FindAsync(id);
+    if (pizza is null)
     {
-        var pizza = await db.Pizzas.FindAsync(id);
-        if (pizza is null)
-        {
-            return Results.NotFound();
-        }
-        db.Pizzas.Remove(pizza);
-        await db.SaveChangesAsync();
-        return Results.Ok();
-    });
+        return Results.NotFound();
+    }
+    db.Pizzas.Remove(pizza);
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
 
 await app.RunAsync();
 
